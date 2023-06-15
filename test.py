@@ -29,7 +29,7 @@ import time
 import matplotlib.pyplot as plt
 import seaborn as sns
 # %matplotlib inline
-sns.set_palette('Paired', 12)
+sns.set_palette('Paired', 13)
 sns.set_color_codes()
 
 #from sklearnex import patch_sklearn
@@ -123,15 +123,15 @@ huge_dataset_sizes=np.arange(1,11) * 100000
 
 sklearn_kmeans = benchmark_kmeans(huge_dataset_sizes, sklearn.cluster.KMeans(10, init="random", n_init=1).fit, (), {}, sample_size=5)
 
-scipy_kmeans = benchmark_kmeans(huge_dataset_sizes, scipy.cluster.vq.kmeans2, (10, ), {"minit":"random"}, sample_size=5)
+scipy_kmeans = benchmark_kmeans(huge_dataset_sizes, scipy.cluster.vq.kmeans2(10), (), {"minit":"random"}, sample_size=5)
 
-pyclustering_kmeans = benchmark_kmeans(huge_dataset_sizes, pyclustering.cluster.kmeans.kmeans, (), {}, sample_size=5)
+pyclustering_kmeans = benchmark_kmeans(huge_dataset_sizes, pyclustering.cluster.kmeans.kmeans(), (), {}, sample_size=5)
 
 sklearn_kmeanspp = benchmark_kmeans(huge_dataset_sizes, sklearn.cluster.KMeans(10, init="k-means++", n_init=1).fit, (), {}, sample_size=5)
 
-scipy_kmeanspp = benchmark_kmeans(huge_dataset_sizes, scipy.cluster.vq.kmeans2, (10, ), {"minit":"++"}, sample_size=5)
+scipy_kmeanspp = benchmark_kmeans(huge_dataset_sizes, scipy.cluster.vq.kmeans2(10), (), {"minit":"++"}, sample_size=5)
 
-pyclustering_kmeanspp = benchmark_kmeans(huge_dataset_sizes, pyclustering.cluster.kmeans.kmeans, (), {}, plusplus=True, sample_size=5)
+pyclustering_kmeanspp = benchmark_kmeans(huge_dataset_sizes, pyclustering.cluster.kmeans.kmeans(), (), {}, plusplus=True, sample_size=5)
 
 sns.regplot(x='x', y='y', data=sklearn_kmeans, order=2, label='Sklearn K-Means', x_estimator=np.mean)
 sns.regplot(x='x', y='y', data=sklearn_kmeanspp, order=2, label='Sklearn K-Means++', x_estimator=np.mean)
@@ -148,10 +148,14 @@ plt.legend()
 """# Comparison of sklearn algorithms"""
 
 def benchmark_sklearn(dataset_sizes, cluster_function, function_args, function_kwds, plusplus=False, dataset_dimension=10, dataset_n_clusters=10, max_time=45, sample_size=2):
+    # Get names of the module and algorithm
+    module_name="sklearn"
+    algorithm_name=str(cluster_function).partition('(')[0].rsplit('.',1)[1].split()[-1]
 
     # Initialize the result with NaNs so that any unfilled entries
     # will be considered NULL when we convert to a pandas dataframe at the end
     result = np.nan * np.ones((len(dataset_sizes), sample_size))
+    mean = np.nan * np.ones(len(dataset_sizes))
     for index, size in enumerate(dataset_sizes):
         for s in range(sample_size):
             # Use sklearns make_blobs to generate a random dataset with specified size
@@ -170,21 +174,22 @@ def benchmark_sklearn(dataset_sizes, cluster_function, function_args, function_k
             # want to spend excessive time on slow algorithms
             if time_taken > max_time:
                 result[index, s] = time_taken
-                return pd.DataFrame(np.vstack([dataset_sizes.repeat(sample_size),
-                                               result.flatten()]).T, columns=['x','y'])
+                mean[index] = np.mean(result[index, ])
+                return pd.DataFrame(np.vstack([dataset_sizes,
+                                               mean.flatten()]).T, columns=['sample_size',algorithm_name+"_"+module_name])
             else:
                 result[index, s] = time_taken
+        mean[index] = np.mean(result[index, ])
 
     # Return the result as a dataframe for easier handling with seaborn afterwards
-    return pd.DataFrame(np.vstack([dataset_sizes.repeat(sample_size),
-                                   result.flatten()]).T, columns=['x','y'])
+    return pd.DataFrame(np.vstack([dataset_sizes,
+                                   mean.flatten()]).T, columns=['sample_size',algorithm_name+"_"+module_name])
 
 # Define different dataset sizes
 small_dataset_sizes=np.hstack([np.arange(1, 6) * 500, np.arange(3,7) * 1000, np.arange(4,17) * 2000])
-big_dataset_sizes=np.arange(1,16) * 4000
-large_dataset_sizes=np.arange(1,11) * 20000
 
 # Fit algorithms
+
 affinity = benchmark_sklearn(small_dataset_sizes, sklearn.cluster.AffinityPropagation().fit, (), {}, sample_size=5)
 
 agglomerative = benchmark_sklearn(small_dataset_sizes, sklearn.cluster.AgglomerativeClustering(10).fit, (), {}, sample_size=5)
@@ -211,24 +216,107 @@ spectral_coclust = benchmark_sklearn(small_dataset_sizes, sklearn.cluster.Spectr
 
 gmm = benchmark_sklearn(small_dataset_sizes, sklearn.mixture.GaussianMixture(10).fit, (), {}, sample_size=5)
 
-sns.regplot(x='x', y='y', data=affinity, order=2, label='Affinity Propagation', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=agglomerative, order=2, label='Agglomerative', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=birch, order=2, label='BIRCH', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=dbscan, order=2, label='DBSCAN', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=kmeans, order=2, label='K-Means++', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=bisecting_kmeans, order=2, label='Bisecting K-Means++', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=minibatch_kmeans, order=2, label='Minibatch K-Means', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=meanshift, order=2, label='Meanshift', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=optics, order=2, label='OPTICS', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=spectral_clust, order=2, label='Spectral clustering', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=spectral_biclut, order=2, label='Spectral biclustering', x_estimator=np.mean)
-sns.regplot(x='x', y='y', data=spectral_coclust, order=2, label='Spectral coclustering', x_estimator=np.mean)
+data_names=[agglomerative, birch, dbscan, kmeans, bisecting_kmeans, minibatch_kmeans, meanshift, optics, spectral_clust, spectral_biclut, spectral_coclust, gmm]
+df=affinity
+for algo in data_names:
+  df=pd.merge(df, algo, on='sample_size', how='outer')
+df.to_csv("all_sklearn_times.csv")
 
-#plt.gca().axis([0, 200000, 0, 5])
+sns.regplot(x='sample_size', y=df.columns[1], data=df, order=2, label='Affinity Propagation')
+sns.regplot(x='sample_size', y=df.columns[2], data=df, order=2, label='Agglomerative')
+sns.regplot(x='sample_size', y=df.columns[3], data=df, order=2, label='BIRCH')
+sns.regplot(x='sample_size', y=df.columns[4], data=df, order=2, label='DBSCAN')
+sns.regplot(x='sample_size', y=df.columns[5], data=df, order=2, label='K-Means++')
+sns.regplot(x='sample_size', y=df.columns[6], data=df, order=2, label='Bisecting K-Means++')
+sns.regplot(x='sample_size', y=df.columns[7], data=df, order=2, label='Minibatch K-Means')
+sns.regplot(x='sample_size', y=df.columns[8], data=df, order=2, label='Meanshift')
+sns.regplot(x='sample_size', y=df.columns[9], data=df, order=2, label='OPTICS')
+sns.regplot(x='sample_size', y=df.columns[10], data=df, order=2, label='Spectral clustering')
+sns.regplot(x='sample_size', y=df.columns[11], data=df, order=2, label='Spectral biclustering')
+sns.regplot(x='sample_size', y=df.columns[12], data=df, order=2, label='Spectral coclustering')
+sns.regplot(x='sample_size', y=df.columns[13], data=df, order=2, label='GMM')
+
+plt.gca().axis([0, 30000, -2, 45])
 plt.gca().set_xlabel('Number of data points')
 plt.gca().set_ylabel('Time taken to cluster (s)')
 plt.title('Performance Comparison of sklearn clustering algorithms')
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+"""Remove from consderation slow algorithms and move on to larger sample sizes"""
+
+# Define larger dataset sizes
+large_dataset_sizes=np.arange(1,11) * 20000
+
+# Fit algorithms
+
+dbscan = benchmark_sklearn(large_dataset_sizes, sklearn.cluster.DBSCAN().fit, (), {}, sample_size=5)
+
+kmeans = benchmark_sklearn(large_dataset_sizes, sklearn.cluster.KMeans(10, init="k-means++", n_init=1).fit, (), {}, sample_size=5)
+
+bisecting_kmeans = benchmark_sklearn(large_dataset_sizes, sklearn.cluster.BisectingKMeans(10, init='k-means++', n_init=1).fit, (), {}, sample_size=5)
+
+minibatch_kmeans = benchmark_sklearn(large_dataset_sizes, sklearn.cluster.MiniBatchKMeans(10, init="k-means++", n_init=1).fit, (), {}, sample_size=5)
+
+spectral_biclut = benchmark_sklearn(large_dataset_sizes, sklearn.cluster.SpectralBiclustering(10).fit, (), {}, sample_size=5)
+
+spectral_coclust = benchmark_sklearn(large_dataset_sizes, sklearn.cluster.SpectralCoclustering().fit, (), {}, sample_size=5)
+
+gmm = benchmark_sklearn(large_dataset_sizes, sklearn.mixture.GaussianMixture(10).fit, (), {}, sample_size=5)
+
+data_names=[kmeans, bisecting_kmeans, minibatch_kmeans, spectral_biclut, spectral_coclust, gmm]
+df=dbscan
+for algo in data_names:
+  df=pd.merge(df, algo, on='sample_size', how='outer')
+df.to_csv("large_data_sklearn_times.csv")
+
+sns.regplot(x='sample_size', y=df.columns[1], data=df, order=2, label='DBSCAN')
+sns.regplot(x='sample_size', y=df.columns[2], data=df, order=2, label='K-Means++')
+sns.regplot(x='sample_size', y=df.columns[3], data=df, order=2, label='Bisecting K-Means++')
+sns.regplot(x='sample_size', y=df.columns[4], data=df, order=2, label='Minibatch K-Means')
+sns.regplot(x='sample_size', y=df.columns[5], data=df, order=2, label='Spectral biclustering')
+sns.regplot(x='sample_size', y=df.columns[6], data=df, order=2, label='Spectral coclustering')
+sns.regplot(x='sample_size', y=df.columns[7], data=df, order=2, label='GMM')
+
+#plt.gca().axis([0, 30000, -2, 45])
+plt.gca().set_xlabel('Number of data points')
+plt.gca().set_ylabel('Time taken to cluster (s)')
+plt.title('Performance Comparison of sklearn clustering algorithms')
+plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+"""Again, remove slowest performing algorithms and increase datasize"""
+
+# Define larger dataset sizes
+huge_dataset_sizes=np.arange(1,11) * 100000
+
+# Fit algorithms
+
+kmeans = benchmark_sklearn(huge_dataset_sizes, sklearn.cluster.KMeans(10, init="k-means++", n_init=1).fit, (), {}, sample_size=5)
+
+bisecting_kmeans = benchmark_sklearn(huge_dataset_sizes, sklearn.cluster.BisectingKMeans(10, init='k-means++', n_init=1).fit, (), {}, sample_size=5)
+
+minibatch_kmeans = benchmark_sklearn(huge_dataset_sizes, sklearn.cluster.MiniBatchKMeans(10, init="k-means++", n_init=1).fit, (), {}, sample_size=5)
+
+spectral_coclust = benchmark_sklearn(huge_dataset_sizes, sklearn.cluster.SpectralCoclustering().fit, (), {}, sample_size=5)
+
+gmm = benchmark_sklearn(huge_dataset_sizes, sklearn.mixture.GaussianMixture(10).fit, (), {}, sample_size=5)
+
+data_names=[bisecting_kmeans, minibatch_kmeans, spectral_coclust, gmm]
+df=kmeans
+for algo in data_names:
+  df=pd.merge(df, algo, on='sample_size', how='outer')
+df.to_csv("huge_data_sklearn_times.csv")
+
+sns.regplot(x='sample_size', y=df.columns[1], data=df, order=2, label='K-Means++', ci=None)
+sns.regplot(x='sample_size', y=df.columns[2], data=df, order=2, label='Bisecting K-Means++', ci=None)
+sns.regplot(x='sample_size', y=df.columns[3], data=df, order=2, label='Minibatch K-Means', ci=None)
+sns.regplot(x='sample_size', y=df.columns[4], data=df, order=2, label='Spectral coclustering', ci=None)
+sns.regplot(x='sample_size', y=df.columns[5], data=df, order=2, label='GMM', ci=None)
+
+#plt.gca().axis([0, 30000, -2, 45])
+plt.gca().set_xlabel('Number of data points')
+plt.gca().set_ylabel('Time taken to cluster (s)')
+plt.title('Performance Comparison of sklearn clustering algorithms')
+plt.legend()
 
 """# Comparison of accuracy of different algorithms (not finished)"""
 
